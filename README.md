@@ -8,7 +8,7 @@
  To install this source code, it is recommended to use VSCode + PlatformIO, since it is the IDE I use while it was being developed. There are many advantages but one I really like is the text highlighting that it implements while writing code. Follow this steps to get it done:
 
 1. Download [VSCode](https://code.visualstudio.com/) and install it, then, open it
-2. Go to the extension menu at the left of the page and search for [PlatformIO](https://platformio.org/) the extension will be added below
+2. Go to the extension menu at the middle left of the page and search for [PlatformIO](https://platformio.org/) the extension will be added below
 3. Execute it and import the project for the Arduino UNO board
 
 ## Usage

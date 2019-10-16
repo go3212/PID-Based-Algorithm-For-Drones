@@ -18,7 +18,7 @@ void giroscopio_salida();
 //GLOBALES//
 unsigned long timer[2];
 
-boolean start = true;
+boolean start = false;
 
 //GIROSCOPIO//
 int MPU6050 = 0x68;
@@ -50,8 +50,8 @@ float pitch_proporcional;
 float pitch_integral;
 float pitch_integral_temp;
 float pitch_derivada;
-float pitch_ganancia_proporcional = 0;
-float pitch_ganancia_integral = 0;
+float pitch_ganancia_proporcional = 2.25;
+float pitch_ganancia_integral = 0.02;
 float pitch_ganancia_derivada = 15;
 float DPS_PITCH_TEMP;
 float gyro_x_temp;
@@ -70,8 +70,8 @@ float yaw_proporcional;
 float yaw_integral;
 float yaw_integral_temp;
 float yaw_derivada;
-float yaw_ganancia_proporcional = 0;
-float yaw_ganancia_integral = 0;
+float yaw_ganancia_proporcional = 3;
+float yaw_ganancia_integral = 0.01;
 float yaw_ganancia_derivada = 0;
 float DPS_YAW_TEMP;
 float gyro_z_temp;
@@ -148,6 +148,17 @@ void setup() {
 
 void loop() {
   timer[1] = micros();
+
+  if(start != true){
+    giroscopio_salida();
+    modulo_vector_aceleracion = sqrt(acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]+acceleration[3]*acceleration[3]);
+    angle_acceleration[1] = asin(acceleration[2]/modulo_vector_aceleracion)*57.296;
+    angle_acceleration[2] = asin(acceleration[1]/modulo_vector_aceleracion)*-57.296;
+    angle[1] = angle_acceleration[1];
+    angle[2] = angle_acceleration[2];
+
+    start = true;
+  }
 
   ////////////////////////////////////////////////////////////////////////////////////
   // CORRECCIONES Y TRANSFORMACIONES GIROSCOPIO
