@@ -151,7 +151,7 @@ void loop() {
 
   if(start != true){
     giroscopio_salida();
-    modulo_vector_aceleracion = sqrt(acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]+acceleration[3]*acceleration[3]);
+    modulo_vector_aceleracion = sqrt(pow(acceleration[1],2)+pow(acceleration[2],2)+pow(acceleration[3],2));
     angle_acceleration[1] = asin(acceleration[2]/modulo_vector_aceleracion)*57.296;
     angle_acceleration[2] = asin(acceleration[1]/modulo_vector_aceleracion)*-57.296;
     angle[1] = angle_acceleration[1];
@@ -181,7 +181,7 @@ void loop() {
   angle[1] -= angle[2]*sin((gyroscope[3]-gyroscope_calibracion[3])*0.000001066);
   angle[2] += angle[1]*sin((gyroscope[3]-gyroscope_calibracion[3])*0.000001066);
 
-  modulo_vector_aceleracion = sqrt(acceleration[1]*acceleration[1]+acceleration[2]*acceleration[2]+acceleration[3]*acceleration[3]);
+  modulo_vector_aceleracion = sqrt(pow(acceleration[1],2)+pow(acceleration[2],2)+pow(acceleration[3],2));
 
   angle_acceleration[1] = asin(acceleration[2]/modulo_vector_aceleracion)*57.296;
   angle_acceleration[2] = asin(acceleration[1]/modulo_vector_aceleracion)*-57.296;
@@ -350,31 +350,6 @@ void giroscopio_salida(){
     gyroscope[3] = (Wire.read() << 8 | Wire.read());
   }
 }
-
-/* WIP
-void Checker(int x){
-  boolean Check = true;
-  while (Check == true){
-  fase_timer = micros();
-  PORTD |= B11110000;
-  esc_timer[1] = esc[1] + fase_timer;
-  esc_timer[2] = esc[2] + fase_timer;
-  esc_timer[3] = esc[3] + fase_timer;
-  esc_timer[4] = esc[4] + fase_timer;
-
-  while(PORTD >= 16){
-    fase_timer = micros();
-    if(esc_timer[1] <= fase_timer) PORTD &= B11101111;
-    if(esc_timer[2] <= fase_timer) PORTD &= B11011111;
-    if(esc_timer[3] <= fase_timer) PORTD &= B10111111;
-    if(esc_timer[4] <= fase_timer) PORTD &= B01111111;
-  }
-
-  timer[2] = micros();
-  while(timer[2] - timer[1] <= 4000) timer[2] = micros();
-  }
-}
-*/
 
 ////////////////////////////////////////////////////////////////////////////////////
 // SUBRUTINAS ISR
