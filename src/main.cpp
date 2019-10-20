@@ -50,8 +50,8 @@ float pitch_proporcional;
 float pitch_integral;
 float pitch_integral_temp;
 float pitch_derivada;
-float pitch_ganancia_proporcional = 2.25;
-float pitch_ganancia_integral = 0.02;
+float pitch_ganancia_proporcional = 1.25;
+float pitch_ganancia_integral = 0.001;
 float pitch_ganancia_derivada = 15;
 float DPS_PITCH_TEMP;
 float gyro_x_temp;
@@ -168,9 +168,9 @@ void loop() {
   giroscopio_angular[2] = (gyroscope[2] - gyroscope_calibracion[2])/65.5;   //LE RESTA LA CALIBRACION PARA OBTENER UN VALOR MAS PRECISO EN EL TIEMPO
   giroscopio_angular[3] = (gyroscope[3] - gyroscope_calibracion[3])/65.5;   //LE RESTA LA CALIBRACION PARA OBTENER UN VALOR MAS PRECISO EN EL TIEMPO
 
-  PID_GYRO[1] = PID_GYRO[1]*0.7 + giroscopio_angular[1]*0.3;
-  PID_GYRO[2] = PID_GYRO[2]*0.7 + giroscopio_angular[2]*0.3;
-  PID_GYRO[3] = PID_GYRO[3]*0.7 + giroscopio_angular[3]*0.3;
+  PID_GYRO[1] = PID_GYRO[1]*0.6 + giroscopio_angular[1]*0.4;
+  PID_GYRO[2] = PID_GYRO[2]*0.6 + giroscopio_angular[2]*0.4;
+  PID_GYRO[3] = PID_GYRO[3]*0.6 + giroscopio_angular[3]*0.4;
 
   ////////////////////////////////////////////////////////////////////////////////////
   // CALCULOS V2 DRONE
@@ -181,13 +181,11 @@ void loop() {
   angle[1] -= angle[2]*sin((gyroscope[3]-gyroscope_calibracion[3])*0.000001066);
   angle[2] += angle[1]*sin((gyroscope[3]-gyroscope_calibracion[3])*0.000001066);
 
-  modulo_vector_aceleracion = sqrt(pow(acceleration[1],2)+pow(acceleration[2],2)+pow(acceleration[3],2));
+  angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
+  angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
 
-  angle_acceleration[1] = asin(acceleration[2]/modulo_vector_aceleracion)*57.296;
-  angle_acceleration[2] = asin(acceleration[1]/modulo_vector_aceleracion)*-57.296;
-
-  angle[1] = angle[1]*0.999 + angle_acceleration[1]*0.001;
-  angle[2] = angle[2]*0.999 + angle_acceleration[2]*0.001;
+  angle[1] = angle[1]*0.99 + angle_acceleration[1]*0.01;
+  angle[2] = angle[2]*0.99 + angle_acceleration[2]*0.01;
 
   PID_ANGLE[1] = angle[2]*15;
   PID_ANGLE[2] = angle[1]*15;
@@ -195,31 +193,16 @@ void loop() {
   // CORRECCIONES CANALES Y CONVERSION A GRADOS POR SEGUNDO
   ////////////////////////////////////////////////////////////////////////////////////
   //DPS_PITCH//
-  if(CH2 > 1540){                                 //INICIA LA CONDICION DETERMINANDO LOS VALORES POSITIVOS
-      DPS_PITCH = (CH2 - 1540)/6;
-  } else if(CH2 < 1460){                          //SI SON INFERIORES,  SERAN NEGATIVOS
-      DPS_PITCH = (CH2 - 1460)/6;
-  } else {                                        //PARA PREVENIR FALLOS DE CORRECCION DEBIDO A LA FRECUENCIA, SI NO
-    //DPS_PITCH = 0;                                //SE ENCUENTRA EN EL RANGO DE MOVIMIENTO, QUE SEA CERO.
-  }
+  if(CH2 > 1540) DPS_PITCH = (CH2 - 1540)/6;
+  else if(CH2 < 1460) DPS_PITCH = (CH2 - 1460)/6;
   ////////////
   //DPS_ROLL//
-  if(CH1 > 1540){                                 //INICIA LA CONDICION DETERMINANDO LOS VALORES POSITIVOS
-      DPS_ROLL = (CH1 - 1540)/6;
-  } else if(CH1 < 1460){                          //SI SON INFERIORES,  SERAN NEGATIVOS
-      DPS_ROLL = (CH1 - 1460)/6;
-  } else {                                        //PARA PREVENIR FALLOS DE CORRECCION DEBIDO A LA FRECUENCIA, SI NO
-    //DPS_ROLL = 0;                                 //SE ENCUENTRA EN EL RANGO DE MOVIMIENTO, QUE SEA CERO.
-  }
+  if(CH1 > 1540) DPS_ROLL = (CH1 - 1540)/6;
+  else if(CH1 < 1460) DPS_ROLL = (CH1 - 1460)/6;
   ///////////
   //DPS_YAW//
-    if(CH4 > 1540){                               //INICIA LA CONDICION DETERMINANDO LOS VALORES POSITIVOS
-      DPS_YAW = (CH4 - 1540)/6;
-  } else if(CH4 < 1460){                          //SI SON INFERIORES,  SERAN NEGATIVOS
-      DPS_YAW = (CH4 - 1460)/6;
-  } else {                                        //PARA PREVENIR FALLOS DE CORRECCION DEBIDO A LA FRECUENCIA, SI NO
-    //DPS_YAW = 0;                                  //SE ENCUENTRA EN EL RANGO DE MOVIMIENTO, QUE SEA CERO.
-  }
+  if(CH4 > 1540) DPS_YAW = (CH4 - 1540)/6;
+  else if(CH4 < 1460) DPS_YAW = (CH4 - 1460)/6;
   /////////////////////
   //CORRECCION THRUST//
   if (CH3 >= 2000) CH3 = 2000;
@@ -229,18 +212,6 @@ void loop() {
   //AJUSTES VERSION 2.0//
   DPS_ROLL -= (PID_ANGLE[1]/10);
   DPS_PITCH -= (PID_ANGLE[2]/10);
-
-  ////////////////////////////////////////////////////////////////////////////////////
-  // SERIAL PARA ACTIVAR HABILITAR EL Serial.begin();
-  ////////////////////////////////////////////////////////////////////////////////////
-  Serial.print(" angle[1] ");
-  Serial.print(angle[1]);
-  Serial.print(" angle[2] ");
-  Serial.print(angle[2]);
-  Serial.print(" gyro[1] ");
-  Serial.print(giroscopio_angular[1]);
-  Serial.print(" gyrp[2] ");
-  Serial.println(giroscopio_angular[2]);
 
   ////////////////////////////////////////////////////////////////////////////////////
   // CONTROLADOR PID
