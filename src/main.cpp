@@ -26,8 +26,8 @@ float acceleration[4];
 float gyroscope[4];
 float temperature;
 long gyroscope_calibracion[4];
-float modulo_vector_aceleracion;
 float giroscopio_angular[4];
+float offset[] = {0, 2.87+0.20, 2.2};
 
 float PID_GYRO[4];
 
@@ -50,9 +50,9 @@ float pitch_proporcional;
 float pitch_integral;
 float pitch_integral_temp;
 float pitch_derivada;
-float pitch_ganancia_proporcional = 1.25;
-float pitch_ganancia_integral = 0.001;
-float pitch_ganancia_derivada = 15;
+float pitch_ganancia_proporcional = 0;
+float pitch_ganancia_integral = 0;
+float pitch_ganancia_derivada = 25;
 float DPS_PITCH_TEMP;
 float gyro_x_temp;
 float PID_PITCH;
@@ -83,6 +83,8 @@ unsigned long esc_timer[5];
 unsigned long fase_timer;
 
 void setup() {
+ // Serial.begin(2000000);
+
   ////////////////////////////////////////////////////////////////////////////////////
   // ISR HABILITAR
   ////////////////////////////////////////////////////////////////////////////////////
@@ -99,6 +101,16 @@ void setup() {
   ////////////////////////////////////////////////////////////////////////////////////
   Wire.begin();
   TWBR = 12;
+
+  ////////////////////////////////////////////////////////////////////////////////////
+  // ESC's
+  ////////////////////////////////////////////////////////////////////////////////////
+  for (int i = 0; i < 1250 ; i++){                      
+    PORTD |= B11110000;                                         
+    delayMicroseconds(1000);                                            
+    PORTD &= B00001111;                                                  
+    delayMicroseconds(3000);                                               
+  }
 
   ////////////////////////////////////////////////////////////////////////////////////
   // GIROSCOPIO
@@ -122,40 +134,33 @@ void setup() {
     gyroscope_calibracion[2] += gyroscope[2];   //SUMA TODAS LAS OSCILACIONES EN LA VELOCIDAD ANGULAR Y
     gyroscope_calibracion[3] += gyroscope[3];   //SUMA TODAS LAS OSCILACIONES EN LA VELOCIDAD ANGULAR Z
 
-    delayMicroseconds(4000);                    //SIMULA LA VELOCIDAD DE ACTUALIZACION DEL LOOP PRINCIPAL
+    PORTD |= B11110000;                                    
+    delayMicroseconds(1000);                                         
+    PORTD &= B00001111; 
+    delayMicroseconds(3000);                    //SIMULA LA VELOCIDAD DE ACTUALIZACION DEL LOOP PRINCIPAL
   }
   gyroscope_calibracion[1] /= 2000;      //DIVIDE EL SUMATORIO DE LAS OSCILACIONES X POR EL NUMERO DE CICLOS "for"
   gyroscope_calibracion[2] /= 2000;      //DIVIDE EL SUMATORIO DE LAS OSCILACIONES Y POR EL NUMERO DE CICLOS "for"
   gyroscope_calibracion[3] /= 2000;      //DIVIDE EL SUMATORIO DE LAS OSCILACIONES Z POR EL NUMERO DE CICLOS "for"
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // ESC's
-  ////////////////////////////////////////////////////////////////////////////////////
-  PORTD |= B11110000;                      //PONEMOS LOS PINES 4-7 EN MODO HIGH (+5V)
-  delayMicroseconds(2000);                //ESPERAMOS 2000us PARA ESTABLECER EL RANGO MAXIMO (2000us)
-  PORTD &= B00000000;                     //PONEMOS LOS PINES 4-7 EN MODO LOW (+5V)
 
-  PORTD |= B11110000;                     //PONEMOS LOS PINES 4-7 EN MODO HIGH (+5V)
-  delayMicroseconds(1500);                //ESPERAMOS 1500us PARA ESTABLECER EL RANGO MEDIO (1500us)
-  PORTD &= B00000000;                     //PONEMOS LOS PINES 4-7 EN MODO LOW (+5V)
-
-  PORTD |= B11110000;                     //PONEMOS LOS PINES 4-7 EN MODO HIGH (+5V)
-  delayMicroseconds(1000);                //ESPERAMOS 1000us PARA ESTABLECER EL RANGO MINIMO (1000us)
-  PORTD &= B00000000;                     //PONEMOS LOS PINES 4-7 EN MODO LOW (+5V)
-
-  //Serial.begin(2000000);
+  PCICR |= (1 << PCIE0);                                      
+  PCMSK0 |= (1 << PCINT0);                            
+  PCMSK0 |= (1 << PCINT1);                             
+  PCMSK0 |= (1 << PCINT2);                      
+  PCMSK0 |= (1 << PCINT3);                                              
 }
 
 void loop() {
   timer[1] = micros();
 
+
   if(start != true){
     giroscopio_salida();
-    modulo_vector_aceleracion = sqrt(pow(acceleration[1],2)+pow(acceleration[2],2)+pow(acceleration[3],2));
-    angle_acceleration[1] = asin(acceleration[2]/modulo_vector_aceleracion)*57.296;
-    angle_acceleration[2] = asin(acceleration[1]/modulo_vector_aceleracion)*-57.296;
-    angle[1] = angle_acceleration[1];
-    angle[2] = angle_acceleration[2];
+    angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
+    angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
+    angle[1] = angle_acceleration[1] + offset[1];
+    angle[2] = angle_acceleration[2] + offset[2];   
 
     start = true;
   }
@@ -184,34 +189,36 @@ void loop() {
   angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
   angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
 
-  angle[1] = angle[1]*0.99 + angle_acceleration[1]*0.01;
-  angle[2] = angle[2]*0.99 + angle_acceleration[2]*0.01;
+  angle[1] = angle[1]*0.999 + (angle_acceleration[1]*0.001 + offset[1]*0.001);
+  angle[2] = angle[2]*0.999 + (angle_acceleration[2]*0.001 + offset[2]*0.001);
 
-  PID_ANGLE[1] = angle[2]*15;
-  PID_ANGLE[2] = angle[1]*15;
+  PID_ANGLE[1] = angle[2]*(15/3);
+  PID_ANGLE[2] = angle[1]*(15/3);
   ////////////////////////////////////////////////////////////////////////////////////
   // CORRECCIONES CANALES Y CONVERSION A GRADOS POR SEGUNDO
   ////////////////////////////////////////////////////////////////////////////////////
   //DPS_PITCH//
+  DPS_PITCH = 0;
   if(CH2 > 1540) DPS_PITCH = (CH2 - 1540)/6;
   else if(CH2 < 1460) DPS_PITCH = (CH2 - 1460)/6;
   ////////////
   //DPS_ROLL//
+  DPS_ROLL = 0;
   if(CH1 > 1540) DPS_ROLL = (CH1 - 1540)/6;
   else if(CH1 < 1460) DPS_ROLL = (CH1 - 1460)/6;
   ///////////
   //DPS_YAW//
+  DPS_YAW = 0;
   if(CH4 > 1540) DPS_YAW = (CH4 - 1540)/6;
   else if(CH4 < 1460) DPS_YAW = (CH4 - 1460)/6;
   /////////////////////
   //CORRECCION THRUST//
-  if (CH3 >= 2000) CH3 = 2000;
-  if (CH3 <= 1000) CH3 = 1000;
+  if(CH3 > 1400) CH3 = 1400;
 
   ///////////////////////
   //AJUSTES VERSION 2.0//
-  DPS_ROLL -= (PID_ANGLE[1]/10);
-  DPS_PITCH -= (PID_ANGLE[2]/10);
+  DPS_ROLL -= (PID_ANGLE[1]);
+  DPS_PITCH -= (PID_ANGLE[2]);
 
   ////////////////////////////////////////////////////////////////////////////////////
   // CONTROLADOR PID
@@ -219,35 +226,33 @@ void loop() {
   //PID_ROLL//
   roll_proporcional = (PID_GYRO[2] - DPS_ROLL) * roll_ganancia_proporcional;
   roll_integral += (PID_GYRO[2] - DPS_ROLL) * roll_ganancia_integral;
-  roll_derivada = ((PID_GYRO[2] - DPS_ROLL) - (gyro_y_temp - DPS_ROLL_TEMP)) * roll_ganancia_derivada;
+  roll_derivada = (PID_GYRO[2] - DPS_ROLL - gyro_y_temp + DPS_ROLL_TEMP) * roll_ganancia_derivada;
 
   PID_ROLL = roll_proporcional + roll_integral + roll_derivada;
 
-  PID_GYRO[2] = gyro_y_temp;
-  DPS_ROLL = DPS_ROLL_TEMP;
+  gyro_y_temp = PID_GYRO[2];
+  DPS_ROLL_TEMP = DPS_ROLL;
   /////////////
   //PID_PITCH//
   pitch_proporcional = (PID_GYRO[1] - DPS_PITCH) * pitch_ganancia_proporcional;
   pitch_integral += (PID_GYRO[1] - DPS_PITCH) * pitch_ganancia_integral;
-  pitch_derivada = ((PID_GYRO[1] - DPS_PITCH) - (gyro_x_temp - DPS_PITCH_TEMP)) * pitch_ganancia_derivada;
+  pitch_derivada = (PID_GYRO[1] - DPS_PITCH - gyro_x_temp + DPS_PITCH_TEMP) * pitch_ganancia_derivada;
 
   PID_PITCH = pitch_proporcional + pitch_integral + pitch_derivada;
 
-  pitch_integral = pitch_integral_temp;
-  PID_GYRO[1] = gyro_x_temp;
-  DPS_PITCH = DPS_PITCH_TEMP;
+  gyro_x_temp = PID_GYRO[1];
+  DPS_PITCH_TEMP = DPS_PITCH;
 
   ///////////
   //PID_YAW//
   yaw_proporcional = (PID_GYRO[3] - DPS_YAW) * yaw_ganancia_proporcional;
   yaw_integral += (PID_GYRO[3] - DPS_YAW) * yaw_ganancia_integral;
-  yaw_derivada = ((PID_GYRO[3] - DPS_YAW) - (gyro_z_temp - DPS_YAW_TEMP)) * yaw_ganancia_derivada;
+  yaw_derivada = (PID_GYRO[3] - DPS_YAW - gyro_z_temp + DPS_YAW_TEMP) * yaw_ganancia_derivada;
 
   PID_YAW = yaw_proporcional + yaw_integral + yaw_derivada;
 
-  yaw_integral = yaw_integral_temp;
-  PID_GYRO[3] = gyro_z_temp;
-  DPS_YAW = DPS_YAW_TEMP;
+  gyro_z_temp = PID_GYRO[3];
+  DPS_YAW_TEMP = DPS_YAW;
 
   /////////////////////////////////////////////////////////////
   //CORRECCIONES EN LOS VALORES PID_YAW; PID_PITCH; PID_ROLL;// 
@@ -268,10 +273,10 @@ void loop() {
 
   ////////////////////////////
   //CORRECCION DE LOS PULSOS//
-  if(esc[1] <= 1000) esc[1] = 1000;
-  if(esc[2] <= 1000) esc[2] = 1000;
-  if(esc[3] <= 1000) esc[3] = 1000;
-  if(esc[4] <= 1000) esc[4] = 1000; 
+  if(esc[1] <= 1088) esc[1] = 1088;
+  if(esc[2] <= 1088) esc[2] = 1088;
+  if(esc[3] <= 1088) esc[3] = 1088;
+  if(esc[4] <= 1088) esc[4] = 1088; 
 
   if(esc[1] >= 2000) esc[1] = 2000;
   if(esc[2] >= 2000) esc[2] = 2000;
@@ -279,7 +284,7 @@ void loop() {
   if(esc[4] >= 2000) esc[4] = 2000;
 
   //////////////////////////
-  //ENVIAR PULSOS ESC[1-4]//
+  //ENVIAR PULSOS ESC[1-4]// 
   fase_timer = micros();
   PORTD |= B11110000;
   esc_timer[1] = esc[1] + fase_timer;
