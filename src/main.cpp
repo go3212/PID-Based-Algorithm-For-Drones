@@ -18,7 +18,7 @@ void giroscopio_salida();
 //GLOBALES//
 unsigned long timer[2];
 
-boolean start = false;
+int start = 1;
 
 //GIROSCOPIO//
 int MPU6050 = 0x68;
@@ -27,7 +27,8 @@ float gyroscope[4];
 float temperature;
 long gyroscope_calibracion[4];
 float giroscopio_angular[4];
-float offset[] = {0, 2.87+0.20, 2.2};
+float offset[] = {0, 0, 0};
+float acceleration_modulus;
 
 float PID_GYRO[4];
 
@@ -50,9 +51,9 @@ float pitch_proporcional;
 float pitch_integral;
 float pitch_integral_temp;
 float pitch_derivada;
-float pitch_ganancia_proporcional = 0;
-float pitch_ganancia_integral = 0;
-float pitch_ganancia_derivada = 25;
+float pitch_ganancia_proporcional = 2.1;
+float pitch_ganancia_integral = 0.001;
+float pitch_ganancia_derivada = 28;
 float DPS_PITCH_TEMP;
 float gyro_x_temp;
 float PID_PITCH;
@@ -70,12 +71,17 @@ float yaw_proporcional;
 float yaw_integral;
 float yaw_integral_temp;
 float yaw_derivada;
-float yaw_ganancia_proporcional = 3;
+float yaw_ganancia_proporcional = 1.5;
 float yaw_ganancia_integral = 0.01;
 float yaw_ganancia_derivada = 0;
 float DPS_YAW_TEMP;
 float gyro_z_temp;
 float PID_YAW;
+
+float p_error;
+float r_error;
+float y_error;
+
 
 //ESC's//
 unsigned long esc[5];
@@ -83,7 +89,6 @@ unsigned long esc_timer[5];
 unsigned long fase_timer;
 
 void setup() {
- // Serial.begin(2000000);
 
   ////////////////////////////////////////////////////////////////////////////////////
   // ISR HABILITAR
@@ -148,22 +153,24 @@ void setup() {
   PCMSK0 |= (1 << PCINT0);                            
   PCMSK0 |= (1 << PCINT1);                             
   PCMSK0 |= (1 << PCINT2);                      
-  PCMSK0 |= (1 << PCINT3);                                              
+  PCMSK0 |= (1 << PCINT3);    
+
+  giroscopio_salida();
+  acceleration_modulus = (pow(acceleration[1], 2) + pow(acceleration[2], 2) + pow(acceleration[3], 2));
+  if(abs(acceleration[2]) < acceleration_modulus){
+    angle_acceleration[1] = asin(acceleration[2]/acceleration_modulus) * 57.296;
+    }
+  if(abs(acceleration[1]) < acceleration_modulus){
+    angle_acceleration[2] = asin(acceleration[1]/acceleration_modulus) * -57.296;
+  }
+  angle[1] = angle_acceleration[1] + offset[1];
+  angle[2] = angle_acceleration[2] + offset[2];   
+
+  start = 0;                                          
 }
 
 void loop() {
   timer[1] = micros();
-
-
-  if(start != true){
-    giroscopio_salida();
-    angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
-    angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
-    angle[1] = angle_acceleration[1] + offset[1];
-    angle[2] = angle_acceleration[2] + offset[2];   
-
-    start = true;
-  }
 
   ////////////////////////////////////////////////////////////////////////////////////
   // CORRECCIONES Y TRANSFORMACIONES GIROSCOPIO
@@ -183,14 +190,26 @@ void loop() {
   angle[1] += (gyroscope[1] - gyroscope_calibracion[1])*(0.0000611);    //PITCH
   angle[2] += (gyroscope[2] - gyroscope_calibracion[2])*(0.0000611);    //ROLL
 
-  angle[1] -= angle[2]*sin((gyroscope[3]-gyroscope_calibracion[3])*0.000001066);
-  angle[2] += angle[1]*sin((gyroscope[3]-gyroscope_calibracion[3])*0.000001066);
+  angle[1] -= angle[2]*sin(gyroscope[3]*0.000001066);
+  angle[2] += angle[1]*sin(gyroscope[3]*0.000001066);
 
+/*
+  acceleration_modulus = (pow(acceleration[1], 2) + pow(acceleration[2], 2) + pow(acceleration[3], 2));
+
+  if(abs(acceleration[2]) < acceleration_modulus){
+    angle_acceleration[1] = asin(acceleration[2]/acceleration_modulus) * 57.296;
+  }
+  if(abs(acceleration[1]) < acceleration_modulus){
+    angle_acceleration[2] = asin(acceleration[1]/acceleration_modulus) * -57.296;
+  }
+*/
+  
   angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
   angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
+  
+  angle[1] = angle[1]*0.9994 + (angle_acceleration[1]*0.0006 + offset[1]*0.0006);
+  angle[2] = angle[2]*0.9994 + (angle_acceleration[2]*0.0006 + offset[2]*0.0006);
 
-  angle[1] = angle[1]*0.999 + (angle_acceleration[1]*0.001 + offset[1]*0.001);
-  angle[2] = angle[2]*0.999 + (angle_acceleration[2]*0.001 + offset[2]*0.001);
 
   PID_ANGLE[1] = angle[2]*(15/3);
   PID_ANGLE[2] = angle[1]*(15/3);
@@ -213,7 +232,7 @@ void loop() {
   else if(CH4 < 1460) DPS_YAW = (CH4 - 1460)/6;
   /////////////////////
   //CORRECCION THRUST//
-  if(CH3 > 1400) CH3 = 1400;
+  if(CH3 > 1600) CH3 = 1600;
 
   ///////////////////////
   //AJUSTES VERSION 2.0//
@@ -224,9 +243,11 @@ void loop() {
   // CONTROLADOR PID
   ////////////////////////////////////////////////////////////////////////////////////
   //PID_ROLL//
-  roll_proporcional = (PID_GYRO[2] - DPS_ROLL) * roll_ganancia_proporcional;
-  roll_integral += (PID_GYRO[2] - DPS_ROLL) * roll_ganancia_integral;
-  roll_derivada = (PID_GYRO[2] - DPS_ROLL - gyro_y_temp + DPS_ROLL_TEMP) * roll_ganancia_derivada;
+  r_error = PID_GYRO[2] - DPS_ROLL;
+
+  roll_proporcional = r_error * roll_ganancia_proporcional;
+  roll_integral += r_error * roll_ganancia_integral;
+  roll_derivada = (r_error - gyro_y_temp + DPS_ROLL_TEMP) * roll_ganancia_derivada;
 
   PID_ROLL = roll_proporcional + roll_integral + roll_derivada;
 
@@ -234,9 +255,11 @@ void loop() {
   DPS_ROLL_TEMP = DPS_ROLL;
   /////////////
   //PID_PITCH//
-  pitch_proporcional = (PID_GYRO[1] - DPS_PITCH) * pitch_ganancia_proporcional;
-  pitch_integral += (PID_GYRO[1] - DPS_PITCH) * pitch_ganancia_integral;
-  pitch_derivada = (PID_GYRO[1] - DPS_PITCH - gyro_x_temp + DPS_PITCH_TEMP) * pitch_ganancia_derivada;
+  p_error = PID_GYRO[1] - DPS_PITCH;
+
+  pitch_proporcional = (p_error) * pitch_ganancia_proporcional;
+  pitch_integral += (p_error) * pitch_ganancia_integral;
+  pitch_derivada = (p_error - gyro_x_temp + DPS_PITCH_TEMP) * pitch_ganancia_derivada;
 
   PID_PITCH = pitch_proporcional + pitch_integral + pitch_derivada;
 
@@ -245,9 +268,11 @@ void loop() {
 
   ///////////
   //PID_YAW//
-  yaw_proporcional = (PID_GYRO[3] - DPS_YAW) * yaw_ganancia_proporcional;
-  yaw_integral += (PID_GYRO[3] - DPS_YAW) * yaw_ganancia_integral;
-  yaw_derivada = (PID_GYRO[3] - DPS_YAW - gyro_z_temp + DPS_YAW_TEMP) * yaw_ganancia_derivada;
+  y_error = PID_GYRO[3] - DPS_YAW;
+
+  yaw_proporcional = (y_error) * yaw_ganancia_proporcional;
+  yaw_integral += (y_error) * yaw_ganancia_integral;
+  yaw_derivada = (y_error - gyro_z_temp + DPS_YAW_TEMP) * yaw_ganancia_derivada;
 
   PID_YAW = yaw_proporcional + yaw_integral + yaw_derivada;
 
