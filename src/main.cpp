@@ -18,7 +18,7 @@ void giroscopio_salida();
 //GLOBALES//
 unsigned long timer[2];
 
-int start = 1;
+int start = 0;
 
 //GIROSCOPIO//
 int MPU6050 = 0x68;
@@ -153,24 +153,23 @@ void setup() {
   PCMSK0 |= (1 << PCINT0);                            
   PCMSK0 |= (1 << PCINT1);                             
   PCMSK0 |= (1 << PCINT2);                      
-  PCMSK0 |= (1 << PCINT3);    
-
-  giroscopio_salida();
-  acceleration_modulus = (pow(acceleration[1], 2) + pow(acceleration[2], 2) + pow(acceleration[3], 2));
-  if(abs(acceleration[2]) < acceleration_modulus){
-    angle_acceleration[1] = asin(acceleration[2]/acceleration_modulus) * 57.296;
-    }
-  if(abs(acceleration[1]) < acceleration_modulus){
-    angle_acceleration[2] = asin(acceleration[1]/acceleration_modulus) * -57.296;
-  }
-  angle[1] = angle_acceleration[1] + offset[1];
-  angle[2] = angle_acceleration[2] + offset[2];   
-
-  start = 0;                                          
+  PCMSK0 |= (1 << PCINT3);                           
 }
 
 void loop() {
   timer[1] = micros();
+
+  //POST-START ROUTINE//
+  if(start == 0){
+    giroscopio_salida();   
+    angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
+    angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
+
+    angle[1] = angle_acceleration[1];
+    angle[2] = angle_acceleration[2];
+
+    start = 1; 
+  }
 
   ////////////////////////////////////////////////////////////////////////////////////
   // CORRECCIONES Y TRANSFORMACIONES GIROSCOPIO
@@ -190,29 +189,18 @@ void loop() {
   angle[1] += (gyroscope[1] - gyroscope_calibracion[1])*(0.0000611);    //PITCH
   angle[2] += (gyroscope[2] - gyroscope_calibracion[2])*(0.0000611);    //ROLL
 
-  angle[1] -= angle[2]*sin(gyroscope[3]*0.000001066);
-  angle[2] += angle[1]*sin(gyroscope[3]*0.000001066);
-
-/*
-  acceleration_modulus = (pow(acceleration[1], 2) + pow(acceleration[2], 2) + pow(acceleration[3], 2));
-
-  if(abs(acceleration[2]) < acceleration_modulus){
-    angle_acceleration[1] = asin(acceleration[2]/acceleration_modulus) * 57.296;
-  }
-  if(abs(acceleration[1]) < acceleration_modulus){
-    angle_acceleration[2] = asin(acceleration[1]/acceleration_modulus) * -57.296;
-  }
-*/
+  angle[2] -= angle[1]*sin(gyroscope[3]*0.000001066);
+  angle[1] += angle[2]*sin(gyroscope[3]*0.000001066);
   
   angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
   angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
   
-  angle[1] = angle[1]*0.9994 + (angle_acceleration[1]*0.0006 + offset[1]*0.0006);
-  angle[2] = angle[2]*0.9994 + (angle_acceleration[2]*0.0006 + offset[2]*0.0006);
-
+  angle[1] = angle[1]*0.9991 + angle_acceleration[1]*0.0009;
+  angle[2] = angle[2]*0.9991 + angle_acceleration[2]*0.0009;
 
   PID_ANGLE[1] = angle[2]*(15/3);
   PID_ANGLE[2] = angle[1]*(15/3);
+
   ////////////////////////////////////////////////////////////////////////////////////
   // CORRECCIONES CANALES Y CONVERSION A GRADOS POR SEGUNDO
   ////////////////////////////////////////////////////////////////////////////////////
@@ -282,11 +270,11 @@ void loop() {
   /////////////////////////////////////////////////////////////
   //CORRECCIONES EN LOS VALORES PID_YAW; PID_PITCH; PID_ROLL;// 
   if(PID_ROLL >= 400) PID_ROLL = 400;
-  if(PID_ROLL <= -400) PID_ROLL = -400;
+  else if(PID_ROLL <= -400) PID_ROLL = -400;
   if(PID_PITCH >= 400) PID_PITCH = 400;
-  if(PID_PITCH <= -400) PID_PITCH = -400;
+  else if(PID_PITCH <= -400) PID_PITCH = -400;
   if(PID_YAW >= 400 ) PID_YAW = 400;
-  if(PID_YAW <= -400 ) PID_YAW = -400;
+  else if(PID_YAW <= -400 ) PID_YAW = -400;
 
   ////////////////////////////////////////////////////////////////////////////////////
   // PULSOS ESC's Y ESC's
@@ -299,14 +287,16 @@ void loop() {
   ////////////////////////////
   //CORRECCION DE LOS PULSOS//
   if(esc[1] <= 1088) esc[1] = 1088;
-  if(esc[2] <= 1088) esc[2] = 1088;
-  if(esc[3] <= 1088) esc[3] = 1088;
-  if(esc[4] <= 1088) esc[4] = 1088; 
+  else if(esc[1] >= 2000) esc[1] = 2000;
 
-  if(esc[1] >= 2000) esc[1] = 2000;
-  if(esc[2] >= 2000) esc[2] = 2000;
-  if(esc[3] >= 2000) esc[3] = 2000;
-  if(esc[4] >= 2000) esc[4] = 2000;
+  if(esc[2] <= 1088) esc[2] = 1088;
+  else if(esc[2] >= 2000) esc[2] = 2000;
+
+  if(esc[3] <= 1088) esc[3] = 1088;
+  else if(esc[3] >= 2000) esc[3] = 2000;
+
+  if(esc[4] <= 1088) esc[4] = 1088; 
+  else if(esc[4] >= 2000) esc[4] = 2000;
 
   //////////////////////////
   //ENVIAR PULSOS ESC[1-4]// 

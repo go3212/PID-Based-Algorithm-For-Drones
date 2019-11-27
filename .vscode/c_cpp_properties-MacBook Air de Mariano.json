@@ -1,0 +1,64 @@
+{
+    "configurations": [
+        {
+            "name": "!!! WARNING !!! AUTO-GENERATED FILE, PLEASE DO NOT MODIFY IT AND USE https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags"
+        },
+        {
+            "name": "Mac",
+            "macFrameworkPath": [],
+            "includePath": [
+                "/Users/usuario/OneDrive/SIL Backup 01-02-2019/Trabajo de investigacion/Codigo Final/PlatformIO/Projects/Drone II/include",
+                "/Users/usuario/OneDrive/SIL Backup 01-02-2019/Trabajo de investigacion/Codigo Final/PlatformIO/Projects/Drone II/src",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/Wire/src",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/cores/arduino",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/variants/standard",
+                "/Users/usuario/.platformio/lib/ArduinoJson_ID64/src",
+                "/Users/usuario/.platformio/lib/I2Cdevlib-Core_ID11",
+                "/Users/usuario/.platformio/lib/I2Cdevlib-MPU6050_ID107",
+                "/Users/usuario/.platformio/lib/LiquidCrystal_ID136",
+                "/Users/usuario/.platformio/lib/Servo_ID883/src",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/EEPROM/src",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/HID/src",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SPI/src",
+                "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SoftwareSerial/src",
+                "/Users/usuario/.platformio/packages/tool-unity",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "/Users/usuario/OneDrive/SIL Backup 01-02-2019/Trabajo de investigacion/Codigo Final/PlatformIO/Projects/Drone II/include",
+                    "/Users/usuario/OneDrive/SIL Backup 01-02-2019/Trabajo de investigacion/Codigo Final/PlatformIO/Projects/Drone II/src",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/Wire/src",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/cores/arduino",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/variants/standard",
+                    "/Users/usuario/.platformio/lib/ArduinoJson_ID64/src",
+                    "/Users/usuario/.platformio/lib/I2Cdevlib-Core_ID11",
+                    "/Users/usuario/.platformio/lib/I2Cdevlib-MPU6050_ID107",
+                    "/Users/usuario/.platformio/lib/LiquidCrystal_ID136",
+                    "/Users/usuario/.platformio/lib/Servo_ID883/src",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/EEPROM/src",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/HID/src",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SPI/src",
+                    "/Users/usuario/.platformio/packages/framework-arduinoavr/libraries/__cores__/arduino/SoftwareSerial/src",
+                    "/Users/usuario/.platformio/packages/tool-unity",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=40100",
+                "ARDUINO_AVR_UNO",
+                "F_CPU=16000000L",
+                "ARDUINO_ARCH_AVR",
+                "ARDUINO=10805",
+                "__AVR_ATmega328P__",
+                ""
+            ],
+            "intelliSenseMode": "clang-x64",
+            "cStandard": "c11",
+            "cppStandard": "c++11",
+            "compilerPath": "\"/Users/usuario/.platformio/packages/toolchain-atmelavr/bin/avr-gcc\" -mmcu=atmega328p"
+        }
+    ],
+    "version": 4
+}
