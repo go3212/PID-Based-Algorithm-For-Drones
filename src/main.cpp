@@ -51,9 +51,9 @@ float pitch_proporcional;
 float pitch_integral;
 float pitch_integral_temp;
 float pitch_derivada;
-float pitch_ganancia_proporcional = 2.1;
-float pitch_ganancia_integral = 0.001;
-float pitch_ganancia_derivada = 28;
+float pitch_ganancia_proporcional = 1;
+float pitch_ganancia_integral = 0;
+float pitch_ganancia_derivada = 1;
 float DPS_PITCH_TEMP;
 float gyro_x_temp;
 float PID_PITCH;
@@ -89,7 +89,6 @@ unsigned long esc_timer[5];
 unsigned long fase_timer;
 
 void setup() {
-
   ////////////////////////////////////////////////////////////////////////////////////
   // ISR HABILITAR
   ////////////////////////////////////////////////////////////////////////////////////
@@ -153,7 +152,8 @@ void setup() {
   PCMSK0 |= (1 << PCINT0);                            
   PCMSK0 |= (1 << PCINT1);                             
   PCMSK0 |= (1 << PCINT2);                      
-  PCMSK0 |= (1 << PCINT3);                           
+  PCMSK0 |= (1 << PCINT3);     
+                 
 }
 
 void loop() {
@@ -233,11 +233,9 @@ void loop() {
   //PID_ROLL//
   r_error = PID_GYRO[2] - DPS_ROLL;
 
-  roll_proporcional = r_error * roll_ganancia_proporcional;
   roll_integral += r_error * roll_ganancia_integral;
-  roll_derivada = (r_error - gyro_y_temp + DPS_ROLL_TEMP) * roll_ganancia_derivada;
 
-  PID_ROLL = roll_proporcional + roll_integral + roll_derivada;
+  PID_ROLL = (r_error) * roll_ganancia_proporcional + roll_integral + (r_error - gyro_y_temp + DPS_ROLL_TEMP) * roll_ganancia_derivada;
 
   gyro_y_temp = PID_GYRO[2];
   DPS_ROLL_TEMP = DPS_ROLL;
@@ -245,11 +243,9 @@ void loop() {
   //PID_PITCH//
   p_error = PID_GYRO[1] - DPS_PITCH;
 
-  pitch_proporcional = (p_error) * pitch_ganancia_proporcional;
   pitch_integral += (p_error) * pitch_ganancia_integral;
-  pitch_derivada = (p_error - gyro_x_temp + DPS_PITCH_TEMP) * pitch_ganancia_derivada;
 
-  PID_PITCH = pitch_proporcional + pitch_integral + pitch_derivada;
+  PID_PITCH = (p_error)*pitch_ganancia_proporcional + pitch_integral + (p_error - gyro_x_temp + DPS_PITCH_TEMP) * pitch_ganancia_derivada;
 
   gyro_x_temp = PID_GYRO[1];
   DPS_PITCH_TEMP = DPS_PITCH;
@@ -258,11 +254,9 @@ void loop() {
   //PID_YAW//
   y_error = PID_GYRO[3] - DPS_YAW;
 
-  yaw_proporcional = (y_error) * yaw_ganancia_proporcional;
   yaw_integral += (y_error) * yaw_ganancia_integral;
-  yaw_derivada = (y_error - gyro_z_temp + DPS_YAW_TEMP) * yaw_ganancia_derivada;
-
-  PID_YAW = yaw_proporcional + yaw_integral + yaw_derivada;
+ 
+  PID_YAW = (y_error) * yaw_ganancia_proporcional + yaw_integral + (y_error - gyro_z_temp + DPS_YAW_TEMP) * yaw_ganancia_derivada;
 
   gyro_z_temp = PID_GYRO[3];
   DPS_YAW_TEMP = DPS_YAW;
