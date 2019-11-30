@@ -2,113 +2,58 @@
 #include <Wire.h>
 
 #define F_CPU 16000000L
-#define RWPOWER 0x6B
-#define GYRO_CONFIG 0x1B
-#define ACC_CONFIG 0x1C
-#define BitHIGH_Start 0x3B
+#define IMU_POWER_REGISTRY 0x6B
+#define GYROSCOPE_CONFIGURATION_REGISTRY 0x1B
+#define ACCELEROMETER_CONFIGURATION_REGISTRY 0x1C
+#define DATA_SEQUENCE_FIRST_BYTE 0x3B //note: there are 14 bytes in total
 
-////////////////////////////////////////////////////////////////////////////////////
-// FUNCTIONS DECLARATION
-////////////////////////////////////////////////////////////////////////////////////
-void giroscopio_salida();
+//DECLARING FUNCTIONS
+void gyroscope_gather_data();
 
-////////////////////////////////////////////////////////////////////////////////////
-// VARIABLES
-////////////////////////////////////////////////////////////////////////////////////
-//GLOBALES//
-unsigned long timer[2];
+//MAIN VARIABLES
+unsigned long timer[1];
 
-int start = 0;
+boolean start = true;
 
-//GIROSCOPIO//
-int MPU6050 = 0x68;
-float acceleration[4];
-float gyroscope[4];
-float temperature;
-long gyroscope_calibracion[4];
-float giroscopio_angular[4];
-float offset[] = {0, 0, 0};
-float acceleration_modulus;
+float raw_gyro_pitch_calibration, raw_gyro_roll_calibration, raw_gyro_yaw_calibration;
+int raw_gyro_pitch, raw_gyro_roll, raw_gyro_yaw;
+int raw_acc_pitch, raw_acc_roll, raw_acc_yaw;
+int raw_temperature;
 
-float PID_GYRO[4];
+float angular_pitch_velocity, angular_roll_velocity, angular_yaw_velocity;
+float angle_pitch, angle_roll, angle_yaw;
+float angle_pitch_acceleration, angle_roll_acceleration, angle_yaw_acceleration;
 
-//VARIABLES INFLUENCIADAS POR EL TIEMPO//
-float angle[4];
-float angle_acceleration[4];
-float PID_ANGLE[4];
+float PITCH_SET_ANGLE, ROLL_SET_ANGLE, YAW_SET_ANGLE;
 
-//CANALES//
-unsigned long ISR_REFRESH_RATE;                   //TIEMPO ENTRE PULSOS
-int CH1, CH2, CH3, CH4;                           //CHANNEL 1, 2, 3, 4
-int IA1, IA2, IA3, IA4;                           //INPUT ANTERIOR
-unsigned long ICRR1, ICRR2, ICRR3, ICRR4;         //ISR_CHANNEL_REFRESH_RATE
+float pitch_error, roll_error, yaw_error;
+float p_pitch_error, p_roll_error, p_yaw_error;
+float PID_PITCH, PID_ROLL, PID_YAW;
+float i_pitch, i_roll, i_yaw;
 
-//PID//
-float DPS_ROLL;                                   //ALMACENA LOS VALORES EN GRADOS POR SEGUNDO EN ROLL DETERMINADOS POR EL PULSO DEL MANDO
-float DPS_YAW;                                    //ALMACENA LOS VALORES EN GRADOS POR SEGUNDO EN YAW DETERMINADOS POR EL PULSO DEL MANDO
-float DPS_PITCH;                                  //ALMACENA LOS VALORES EN GRADOS POR SEGUNDO EN PITCH DETERMINADOS POR EL PULSO DEL MANDO
-float pitch_proporcional;
-float pitch_integral;
-float pitch_integral_temp;
-float pitch_derivada;
-float pitch_ganancia_proporcional = 1;
-float pitch_ganancia_integral = 0;
-float pitch_ganancia_derivada = 1;
-float DPS_PITCH_TEMP;
-float gyro_x_temp;
-float PID_PITCH;
-float roll_proporcional;
-float roll_integral;
-float roll_integral_temp;
-float roll_derivada;
-float roll_ganancia_proporcional = pitch_ganancia_proporcional;
-float roll_ganancia_integral = pitch_ganancia_integral;
-float roll_ganancia_derivada = pitch_ganancia_derivada;
-float DPS_ROLL_TEMP;
-float gyro_y_temp;
-float PID_ROLL;
-float yaw_proporcional;
-float yaw_integral;
-float yaw_integral_temp;
-float yaw_derivada;
-float yaw_ganancia_proporcional = 1.5;
-float yaw_ganancia_integral = 0.01;
-float yaw_ganancia_derivada = 0;
-float DPS_YAW_TEMP;
-float gyro_z_temp;
-float PID_YAW;
+float pitch_proportional_gain, roll_proportional_gain, yaw_proportional_gain;
+float pitch_integral_gain, roll_integral_gain, yaw_integral_gain;
+float pitch_derivative_gain, roll_derivative_gain, yaw_derivative_gain;
 
-float p_error;
-float r_error;
-float y_error;
+unsigned long esc_1, esc_2, esc_3, esc_4;
+unsigned long esc_timer_1, esc_timer_2, esc_timer_3, esc_timer_4;
+unsigned long timer_phase;
 
-
-//ESC's//
-unsigned long esc[5];
-unsigned long esc_timer[5];
-unsigned long fase_timer;
+//CONTROLLER VARIABLES
+int CHANNEL1, CHANNEL2, CHANNEL3, CHANNEL4, CHANNEL6;
+int CHANNEL_STATE_1, CHANNEL_STATE_2, CHANNEL_STATE_3, CHANNEL_STATE_4, CHANNEL_STATE_5, CHANNEL_STATE_6;
+unsigned long ICRR1, ICRR2, ICRR3, ICRR4, ICRR5, ICRR6;
+unsigned long ISR_REFRESH_RATE;
 
 void setup() {
-  ////////////////////////////////////////////////////////////////////////////////////
-  // ISR HABILITAR
-  ////////////////////////////////////////////////////////////////////////////////////
-  PCICR = 0b00000001;   //ESTE REGISTRO, HABILITA EL Pin Change Interrupt Control
-  PCMSK0 = 0b00001111;  //ESTE REGISTRO, PONE EN MODO Pin Change Interrupt Control LOS PINES 11-8, ESTO SIGNIFICA QUE CADA VEZ QUE HAYA UN CAMBIO EN ESTOS PINES, OTRA PARTE DEL CODIGO SE EJECUTARA AUTOMATICAMENTE
+  Wire.begin();
+  TWBR = 12;   //TWBR = ((F_CPU / frequency) - 16) / 2;
   
-  ////////////////////////////////////////////////////////////////////////////////////
-  // PINES
-  ////////////////////////////////////////////////////////////////////////////////////
+  PCICR = 0b00000001;
+  PCMSK0 = 0b00001111;
+
   DDRD |= B11110000;
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // RUTINA PRINCIPAL
-  ////////////////////////////////////////////////////////////////////////////////////
-  Wire.begin();
-  TWBR = 12;
-
-  ////////////////////////////////////////////////////////////////////////////////////
-  // ESC's
-  ////////////////////////////////////////////////////////////////////////////////////
   for (int i = 0; i < 1250 ; i++){                      
     PORTD |= B11110000;                                         
     delayMicroseconds(1000);                                            
@@ -116,269 +61,248 @@ void setup() {
     delayMicroseconds(3000);                                               
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // GIROSCOPIO
-  ////////////////////////////////////////////////////////////////////////////////////
-  Wire.beginTransmission(MPU6050);       //HABILITA CONEXION EN EL BUS I2C AL ESCLAVO 0x68
-  Wire.write(RWPOWER);                   //ESCRIBE EN EL REGISTRO DE "POWER0"
-  Wire.write(0b00000000);                //ESTABLECE SUS PARAMETROS
+  //The next chain of code tweaks the MPU6050 parameters to fit with everything else
+  Wire.beginTransmission(0x68);
+  Wire.write(IMU_POWER_REGISTRY);
+  Wire.write(0b00000000); //8Mhz Oscillation Clock
   Wire.endTransmission();
-  Wire.beginTransmission(MPU6050);
-  Wire.write(GYRO_CONFIG);               //ESCRIBE EN EL REGISTRO DE "GYRO_CONFIG"
-  Wire.write(0b00001000);                //ESTABLECE SUS PARAMETROS
+  Wire.beginTransmission(0x68);
+  Wire.write(GYROSCOPE_CONFIGURATION_REGISTRY);
+  Wire.write(0b00001000); //FS_SEL = 1 +-500º/s
   Wire.endTransmission();
-  Wire.beginTransmission(MPU6050);
-  Wire.write(ACC_CONFIG);                //ESCRIBE EN EL REGISTRO DE "ACC_CONFIG"
-  Wire.write(0b00000000);                //ESTABLECE SUS PARAMETROS
-  Wire.endTransmission();                //PARA LA TRANSMISION Y CONFIGURACION
-
-  for(int i = 0; i <= 2000; i++){
-    giroscopio_salida();                        //RECLAMA TODAS LOS VALORES ACTUALES DEL GIROSCOPIO
-    gyroscope_calibracion[1] += gyroscope[1];   //SUMA TODAS LAS OSCILACIONES EN LA VELOCIDAD ANGULAR X
-    gyroscope_calibracion[2] += gyroscope[2];   //SUMA TODAS LAS OSCILACIONES EN LA VELOCIDAD ANGULAR Y
-    gyroscope_calibracion[3] += gyroscope[3];   //SUMA TODAS LAS OSCILACIONES EN LA VELOCIDAD ANGULAR Z
-
-    PORTD |= B11110000;                                    
-    delayMicroseconds(1000);                                         
-    PORTD &= B00001111; 
-    delayMicroseconds(3000);                    //SIMULA LA VELOCIDAD DE ACTUALIZACION DEL LOOP PRINCIPAL
-  }
-  gyroscope_calibracion[1] /= 2000;      //DIVIDE EL SUMATORIO DE LAS OSCILACIONES X POR EL NUMERO DE CICLOS "for"
-  gyroscope_calibracion[2] /= 2000;      //DIVIDE EL SUMATORIO DE LAS OSCILACIONES Y POR EL NUMERO DE CICLOS "for"
-  gyroscope_calibracion[3] /= 2000;      //DIVIDE EL SUMATORIO DE LAS OSCILACIONES Z POR EL NUMERO DE CICLOS "for"
-
+  Wire.beginTransmission(0x68);
+  Wire.write(ACCELEROMETER_CONFIGURATION_REGISTRY);
+  Wire.write(0b00010000); //AFS_SEL = 2 +- 8g
+  Wire.endTransmission();
 
   PCICR |= (1 << PCIE0);                                      
   PCMSK0 |= (1 << PCINT0);                            
   PCMSK0 |= (1 << PCINT1);                             
   PCMSK0 |= (1 << PCINT2);                      
-  PCMSK0 |= (1 << PCINT3);     
-                 
+  PCMSK0 |= (1 << PCINT3);    
+
+  //The next lines will calibrate the gyroscope drift.
+  for(int i = 0; i < 2000; i++){
+    gyroscope_gather_data();
+    raw_gyro_pitch_calibration += raw_gyro_pitch;
+    raw_gyro_roll_calibration += raw_gyro_roll;
+    raw_gyro_yaw_calibration += raw_gyro_yaw;
+
+    delayMicroseconds(4000);
+  }
+
+  raw_gyro_pitch_calibration /= 2000;
+  raw_gyro_roll_calibration /= 2000;
+  raw_gyro_yaw_calibration /= 2000;
+
+  //////////////////////////////
+  //PID VALUES
+  pitch_proportional_gain = 1;
+  pitch_integral_gain = 0;
+  pitch_derivative_gain = 0;
+  
+  roll_proportional_gain = pitch_proportional_gain;
+  roll_integral_gain = pitch_integral_gain;
+  roll_derivative_gain = pitch_derivative_gain;
+
+  yaw_proportional_gain = 0;
+  yaw_integral_gain = 0;
+  yaw_derivative_gain = 0;
 }
 
 void loop() {
-  timer[1] = micros();
+  timer[0] = micros();
 
-  //POST-START ROUTINE//
-  if(start == 0){
-    giroscopio_salida();   
-    angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
-    angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
+  gyroscope_gather_data();
 
-    angle[1] = angle_acceleration[1];
-    angle[2] = angle_acceleration[2];
+  if(start == true){
+      angle_pitch = atan(raw_acc_roll/sqrt(pow(raw_acc_pitch,2)+pow(raw_acc_yaw,2)))*57.296;
+      angle_roll = atan(raw_acc_pitch/sqrt(pow(raw_acc_roll,2)+pow(raw_acc_yaw,2)))*-57.296;
 
-    start = 1; 
+      start = false;
   }
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // CORRECCIONES Y TRANSFORMACIONES GIROSCOPIO
-  ////////////////////////////////////////////////////////////////////////////////////
-  giroscopio_salida();                    //RECLAMA LOS VALORES DEL GIROSCOPIO ACTUALES
-  giroscopio_angular[1] = (gyroscope[1] - gyroscope_calibracion[1])/65.5;   //LE RESTA LA CALIBRACION PARA OBTENER UN VALOR MAS PRECISO EN EL TIEMPO
-  giroscopio_angular[2] = (gyroscope[2] - gyroscope_calibracion[2])/65.5;   //LE RESTA LA CALIBRACION PARA OBTENER UN VALOR MAS PRECISO EN EL TIEMPO
-  giroscopio_angular[3] = (gyroscope[3] - gyroscope_calibracion[3])/65.5;   //LE RESTA LA CALIBRACION PARA OBTENER UN VALOR MAS PRECISO EN EL TIEMPO
+  //////////////////////////////////
+  //RIGID BODY PROPERTIES AND STATUS
+  raw_gyro_pitch -= raw_gyro_pitch_calibration;
+  raw_gyro_roll -= raw_gyro_roll_calibration;
+  raw_gyro_yaw -= raw_gyro_yaw_calibration;
 
-  PID_GYRO[1] = PID_GYRO[1]*0.6 + giroscopio_angular[1]*0.4;
-  PID_GYRO[2] = PID_GYRO[2]*0.6 + giroscopio_angular[2]*0.4;
-  PID_GYRO[3] = PID_GYRO[3]*0.6 + giroscopio_angular[3]*0.4;
+  angular_pitch_velocity = angular_pitch_velocity * 0.7 + (raw_gyro_pitch / 65.5)* 0.3;   //raw_gyro/FS_SEL=2 -> raw_value/65.5 -> degrees/second (º/s)
+  angular_roll_velocity = angular_roll_velocity * 0.7 + (raw_gyro_roll / 65.5) * 0.3;
+  angular_yaw_velocity = angular_yaw_velocity * 0.7 + (raw_gyro_yaw / 65.5) * 0.3;   
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // CALCULOS V2 DRONE
-  ////////////////////////////////////////////////////////////////////////////////////
-  angle[1] += (gyroscope[1] - gyroscope_calibracion[1])*(0.0000611);    //PITCH
-  angle[2] += (gyroscope[2] - gyroscope_calibracion[2])*(0.0000611);    //ROLL
+  angle_pitch += angular_pitch_velocity * 0.004;  //Integration ∫wt = += w*t -> angular_velocity*cycle_time
+  angle_roll += angular_roll_velocity * 0.004;
+  angle_yaw += angular_yaw_velocity * 0.004;
 
-  angle[2] -= angle[1]*sin(gyroscope[3]*0.000001066);
-  angle[1] += angle[2]*sin(gyroscope[3]*0.000001066);
-  
-  angle_acceleration[1] = atan(acceleration[2]/sqrt(pow(acceleration[1],2)+pow(acceleration[3],2)))*57.296;
-  angle_acceleration[2] = atan(acceleration[1]/sqrt(pow(acceleration[2],2)+pow(acceleration[3],2)))*-57.296;
-  
-  angle[1] = angle[1]*0.9991 + angle_acceleration[1]*0.0009;
-  angle[2] = angle[2]*0.9991 + angle_acceleration[2]*0.0009;
+  //LINEAR TRANSFORMATIONS
+  angle_pitch -= (-angle_roll)*sin(angular_yaw_velocity*0.000069813); //the sin function is in radians 
+  angle_roll += (-angle_pitch)*sin(angular_yaw_velocity*0.000069813);
 
-  PID_ANGLE[1] = angle[2]*(15/3);
-  PID_ANGLE[2] = angle[1]*(15/3);
+  angle_pitch_acceleration = atan(raw_acc_roll/sqrt(pow(raw_acc_pitch,2)+pow(raw_acc_yaw,2)))*57.296;
+  angle_roll_acceleration = atan(raw_acc_pitch/sqrt(pow(raw_acc_roll,2)+pow(raw_acc_yaw,2)))*-57.296;
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // CORRECCIONES CANALES Y CONVERSION A GRADOS POR SEGUNDO
-  ////////////////////////////////////////////////////////////////////////////////////
-  //DPS_PITCH//
-  DPS_PITCH = 0;
-  if(CH2 > 1540) DPS_PITCH = (CH2 - 1540)/6;
-  else if(CH2 < 1460) DPS_PITCH = (CH2 - 1460)/6;
-  ////////////
-  //DPS_ROLL//
-  DPS_ROLL = 0;
-  if(CH1 > 1540) DPS_ROLL = (CH1 - 1540)/6;
-  else if(CH1 < 1460) DPS_ROLL = (CH1 - 1460)/6;
-  ///////////
-  //DPS_YAW//
-  DPS_YAW = 0;
-  if(CH4 > 1540) DPS_YAW = (CH4 - 1540)/6;
-  else if(CH4 < 1460) DPS_YAW = (CH4 - 1460)/6;
-  /////////////////////
-  //CORRECCION THRUST//
-  if(CH3 > 1600) CH3 = 1600;
+  //LOW PASS FILTERING THE ANGLES AND THE ANGULAR VELOCITY
+  angle_pitch = angle_pitch*0.9996 + angle_pitch_acceleration*0.0004;
+  angle_roll = angle_roll*0.9996 + angle_roll_acceleration*0.0004;
 
-  ///////////////////////
-  //AJUSTES VERSION 2.0//
-  DPS_ROLL -= (PID_ANGLE[1]);
-  DPS_PITCH -= (PID_ANGLE[2]);
+  //////////////////////////////////
+  //CHANNEL DATA FILTER
+  PITCH_SET_ANGLE = 0;
+  ROLL_SET_ANGLE = 0;
+  YAW_SET_ANGLE = 0;
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // CONTROLADOR PID
-  ////////////////////////////////////////////////////////////////////////////////////
-  //PID_ROLL//
-  r_error = PID_GYRO[2] - DPS_ROLL;
+  if(CHANNEL1 > 1540) PITCH_SET_ANGLE = (CHANNEL1 - 1540)/6;
+  else if(CHANNEL1 < 1460) PITCH_SET_ANGLE = (CHANNEL1 - 1460)/6;
 
-  roll_integral += r_error * roll_ganancia_integral;
+  if(CHANNEL2 > 1540) ROLL_SET_ANGLE = (CHANNEL2 - 1540)/6;
+  else if(CHANNEL2 < 1460) ROLL_SET_ANGLE = (CHANNEL2 - 1460)/6; 
 
-  PID_ROLL = (r_error) * roll_ganancia_proporcional + roll_integral + (r_error - gyro_y_temp + DPS_ROLL_TEMP) * roll_ganancia_derivada;
+  if(CHANNEL4 > 1540) YAW_SET_ANGLE = (CHANNEL4 - 1540)/6;
+  else if(CHANNEL4 < 1460) YAW_SET_ANGLE = (CHANNEL4 - 1460)/6;
 
-  gyro_y_temp = PID_GYRO[2];
-  DPS_ROLL_TEMP = DPS_ROLL;
-  /////////////
-  //PID_PITCH//
-  p_error = PID_GYRO[1] - DPS_PITCH;
+  PITCH_SET_ANGLE -= (angle_pitch*6);
+  ROLL_SET_ANGLE -= (angle_roll*6);
 
-  pitch_integral += (p_error) * pitch_ganancia_integral;
+  //////////////////////////////////
+  //PID CONTROLLER
+  pitch_error = (angular_pitch_velocity - PITCH_SET_ANGLE);
 
-  PID_PITCH = (p_error)*pitch_ganancia_proporcional + pitch_integral + (p_error - gyro_x_temp + DPS_PITCH_TEMP) * pitch_ganancia_derivada;
+  i_pitch += pitch_error * pitch_integral_gain;
 
-  gyro_x_temp = PID_GYRO[1];
-  DPS_PITCH_TEMP = DPS_PITCH;
+  PID_PITCH = pitch_error * pitch_proportional_gain + i_pitch + (pitch_error - p_pitch_error) * pitch_derivative_gain;
 
-  ///////////
-  //PID_YAW//
-  y_error = PID_GYRO[3] - DPS_YAW;
+  p_pitch_error = pitch_error;
 
-  yaw_integral += (y_error) * yaw_ganancia_integral;
- 
-  PID_YAW = (y_error) * yaw_ganancia_proporcional + yaw_integral + (y_error - gyro_z_temp + DPS_YAW_TEMP) * yaw_ganancia_derivada;
+  roll_error = (angular_roll_velocity - ROLL_SET_ANGLE);
 
-  gyro_z_temp = PID_GYRO[3];
-  DPS_YAW_TEMP = DPS_YAW;
+  i_roll += roll_error * roll_integral_gain;
 
-  /////////////////////////////////////////////////////////////
-  //CORRECCIONES EN LOS VALORES PID_YAW; PID_PITCH; PID_ROLL;// 
+  PID_ROLL = roll_error * roll_proportional_gain + i_roll + (roll_error - p_roll_error) * roll_derivative_gain;
+
+  p_roll_error = roll_error;
+
+  yaw_error = (angular_yaw_velocity - YAW_SET_ANGLE);
+
+  i_yaw += yaw_error * yaw_integral_gain;
+
+  PID_YAW = yaw_error * yaw_proportional_gain + i_yaw + (yaw_error - p_yaw_error) * yaw_derivative_gain;
+
+  p_yaw_error = yaw_error;
+
+  /////////////////
+  //PID CORRECTIONS
   if(PID_ROLL >= 400) PID_ROLL = 400;
   else if(PID_ROLL <= -400) PID_ROLL = -400;
   if(PID_PITCH >= 400) PID_PITCH = 400;
   else if(PID_PITCH <= -400) PID_PITCH = -400;
   if(PID_YAW >= 400 ) PID_YAW = 400;
-  else if(PID_YAW <= -400 ) PID_YAW = -400;
+  else if(PID_YAW <= -400 ) PID_YAW = -400;  
 
-  ////////////////////////////////////////////////////////////////////////////////////
-  // PULSOS ESC's Y ESC's
-  ////////////////////////////////////////////////////////////////////////////////////
-  esc[1] = CH3 - PID_PITCH - PID_ROLL - PID_YAW;  //PC4
-  esc[2] = CH3 - PID_PITCH + PID_ROLL + PID_YAW;  //PC5
-  esc[3] = CH3 + PID_PITCH + PID_ROLL - PID_YAW;  //PC6
-  esc[4] = CH3 + PID_PITCH - PID_ROLL + PID_YAW;  //PC7
+  //////////////////
+  //ESC PULSE LENGHT
+  esc_1 = CHANNEL3 - PID_PITCH - PID_ROLL - PID_YAW;
+  esc_2 = CHANNEL3 - PID_PITCH + PID_ROLL + PID_YAW;
+  esc_3 = CHANNEL3 + PID_PITCH + PID_ROLL - PID_YAW;
+  esc_4 = CHANNEL3 + PID_PITCH - PID_ROLL + PID_YAW;
 
-  ////////////////////////////
-  //CORRECCION DE LOS PULSOS//
-  if(esc[1] <= 1088) esc[1] = 1088;
-  else if(esc[1] >= 2000) esc[1] = 2000;
+  ///////////////////
+  //PULSE CORRECTION
+  if(esc_1 <= 1088) esc_1 = 1088;
+  else if(esc_1 >= 2000) esc_1 = 2000;
 
-  if(esc[2] <= 1088) esc[2] = 1088;
-  else if(esc[2] >= 2000) esc[2] = 2000;
+  if(esc_2 <= 1088) esc_2 = 1088;
+  else if(esc_2 >= 2000) esc_2 = 2000;
 
-  if(esc[3] <= 1088) esc[3] = 1088;
-  else if(esc[3] >= 2000) esc[3] = 2000;
+  if(esc_3 <= 1088) esc_3 = 1088;
+  else if(esc_3 >= 2000) esc_3 = 2000;
 
-  if(esc[4] <= 1088) esc[4] = 1088; 
-  else if(esc[4] >= 2000) esc[4] = 2000;
+  if(esc_4 <= 1088) esc_4 = 1088; 
+  else if(esc_4 >= 2000) esc_4 = 2000;
 
-  //////////////////////////
-  //ENVIAR PULSOS ESC[1-4]// 
-  fase_timer = micros();
+  /////////////
+  //SEND PULSES
+  timer_phase = micros();
   PORTD |= B11110000;
-  esc_timer[1] = esc[1] + fase_timer;
-  esc_timer[2] = esc[2] + fase_timer;
-  esc_timer[3] = esc[3] + fase_timer;
-  esc_timer[4] = esc[4] + fase_timer;
+  esc_timer_1 = esc_1 + timer_phase;
+  esc_timer_2 = esc_2 + timer_phase;
+  esc_timer_3 = esc_3 + timer_phase;
+  esc_timer_4 = esc_4 + timer_phase;
 
   while(PORTD >= 16){
-    fase_timer = micros();
-    if(esc_timer[1] <= fase_timer) PORTD &= B11101111;
-    if(esc_timer[2] <= fase_timer) PORTD &= B11011111;
-    if(esc_timer[3] <= fase_timer) PORTD &= B10111111;
-    if(esc_timer[4] <= fase_timer) PORTD &= B01111111;
+    timer_phase = micros();
+    if(esc_timer_1 <= timer_phase) PORTD &= B11101111;
+    if(esc_timer_2 <= timer_phase) PORTD &= B11011111;
+    if(esc_timer_3 <= timer_phase) PORTD &= B10111111;
+    if(esc_timer_4 <= timer_phase) PORTD &= B01111111;
   }
 
-  timer[2] = micros();
-  while(timer[2] - timer[1] <= 4000) timer[2] = micros();
+  timer[1] = micros();
+  while(timer[1] - timer[0] <= 4000) timer[1] = micros();
 }
 
-////////////////////////////////////////////////////////////////////////////////////
-// FUNCTIONS
-////////////////////////////////////////////////////////////////////////////////////
-void giroscopio_salida(){
-  Wire.beginTransmission(MPU6050);
-  Wire.write(BitHIGH_Start);
+void gyroscope_gather_data(){
+  Wire.beginTransmission(0x68);
+  Wire.write(DATA_SEQUENCE_FIRST_BYTE);
   Wire.endTransmission();
 
-  Wire.requestFrom(MPU6050, 14);
+  Wire.requestFrom(0x68, 14);
 
   if(Wire.available() <= 14){
-    acceleration[1] = Wire.read() << 8 | Wire.read();
-    acceleration[2] = Wire.read() << 8 | Wire.read();
-    acceleration[3] = Wire.read() << 8 | Wire.read();
+    raw_acc_pitch = Wire.read() << 8 | Wire.read();
+    raw_acc_roll = Wire.read() << 8 | Wire.read();
+    raw_acc_yaw = Wire.read() << 8 | Wire.read();
 
-    temperature = Wire.read() << 8 | Wire.read();
+    raw_temperature = Wire.read() << 8 | Wire.read();
 
-    gyroscope[1] = (Wire.read() << 8 | Wire.read());
-    gyroscope[2] = (Wire.read() << 8 | Wire.read());
-    gyroscope[3] = (Wire.read() << 8 | Wire.read());
+    raw_gyro_pitch = Wire.read() << 8 | Wire.read();
+    raw_gyro_roll = Wire.read() << 8 | Wire.read();
+    raw_gyro_yaw = Wire.read() << 8 | Wire.read();
   }
 }
 
-////////////////////////////////////////////////////////////////////////////////////
-// SUBRUTINAS ISR
-////////////////////////////////////////////////////////////////////////////////////
 ISR(PCINT0_vect){
-    ISR_REFRESH_RATE = micros();
-    //CHANNEL 1
-    if(PINB & B00000001){
-      if(IA1 == 0){
-        IA1 = 1;
-        ICRR1 = ISR_REFRESH_RATE;
-      }
-    }else if(IA1 == 1){
-      IA1 = 0;
-      CH1 = ISR_REFRESH_RATE - ICRR1;
+  ISR_REFRESH_RATE = micros();
+  //CHANNEL 1
+  if(PINB & B00000001){
+    if(CHANNEL_STATE_1 == 0){
+      CHANNEL_STATE_1 = 1;
+      ICRR1 = ISR_REFRESH_RATE;
     }
-    //CHANNEL 2
-    if(PINB & B00000010){
-      if(IA2 == 0){
-        IA2 = 1;
-        ICRR2 = ISR_REFRESH_RATE;
-      }
-    }else if(IA2 == 1){
-      IA2 = 0;
-      CH2 = ISR_REFRESH_RATE - ICRR2;
-    }
-    //CHANNEL 3
-    if(PINB & B00000100){
-      if(IA3 == 0){
-        IA3 = 1;
-        ICRR3 = ISR_REFRESH_RATE;
-      }
-    }else if(IA3 == 1){
-      IA3 = 0;
-      CH3 = ISR_REFRESH_RATE - ICRR3;
-    }
-    //CHANNEL 4
-    if(PINB & B00001000){
-      if(IA4 == 0){
-        IA4 = 1;
-        ICRR4 = ISR_REFRESH_RATE;
-      }
-    }else if(IA4 == 1){
-      IA4 = 0;
-      CH4 = ISR_REFRESH_RATE - ICRR4;
-    }
+  }else if(CHANNEL_STATE_1 == 1){
+     CHANNEL_STATE_1 = 0;
+     CHANNEL1 = ISR_REFRESH_RATE - ICRR1;
   }
+  //CHANNEL 2
+  if(PINB & B00000010){
+    if(CHANNEL_STATE_2 == 0){
+      CHANNEL_STATE_2 = 1;
+      ICRR2 = ISR_REFRESH_RATE;
+    }
+  }else if(CHANNEL_STATE_2 == 1){
+    CHANNEL_STATE_2 = 0;
+    CHANNEL2 = ISR_REFRESH_RATE - ICRR2;
+  }
+  //CHANNEL 3
+  if(PINB & B00000100){
+    if(CHANNEL_STATE_3 == 0){
+      CHANNEL_STATE_3 = 1;
+      ICRR3 = ISR_REFRESH_RATE;
+    }
+  }else if(CHANNEL_STATE_3 == 1){
+    CHANNEL_STATE_3 = 0;
+    CHANNEL3 = ISR_REFRESH_RATE - ICRR3;
+  }
+  //CHANNEL 4
+  if(PINB & B00001000){
+    if(CHANNEL_STATE_4 == 0){
+      CHANNEL_STATE_4 = 1;
+      ICRR4 = ISR_REFRESH_RATE;
+    }
+  }else if(CHANNEL_STATE_4 == 1){
+    CHANNEL_STATE_4 = 0;
+    CHANNEL4 = ISR_REFRESH_RATE - ICRR4;
+  }
+}
+
