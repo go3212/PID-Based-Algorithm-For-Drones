@@ -36,11 +36,11 @@ float pitch_integral_gain, roll_integral_gain, yaw_integral_gain;
 float pitch_derivative_gain, roll_derivative_gain, yaw_derivative_gain;
 
 unsigned long esc_1, esc_2, esc_3, esc_4;
-unsigned long esc_timer_1, esc_timer_2, esc_timer_3, esc_timer_4;
+unsigned long esc_timer_1, esc_timer_2, esc_timer_3, esc_timer_4, esc_timer_def;
 unsigned long timer_phase;
 
 //CONTROLLER VARIABLES
-int CHANNEL1, CHANNEL2, CHANNEL3, CHANNEL4, CHANNEL6;
+int CHANNEL1, CHANNEL2, CHANNEL3, CHANNEL4, CHANNEL5, CHANNEL6;
 int CHANNEL_STATE_1, CHANNEL_STATE_2, CHANNEL_STATE_3, CHANNEL_STATE_4, CHANNEL_STATE_5, CHANNEL_STATE_6;
 unsigned long ICRR1, ICRR2, ICRR3, ICRR4, ICRR5, ICRR6;
 unsigned long ISR_REFRESH_RATE;
@@ -50,7 +50,7 @@ void setup() {
   TWBR = 12;   //TWBR = ((F_CPU / frequency) - 16) / 2;
   
   PCICR = 0b00000001;
-  PCMSK0 = 0b00001111;
+  PCMSK0 = 0b00011111;
 
   DDRD |= B11110000;
 
@@ -79,7 +79,8 @@ void setup() {
   PCMSK0 |= (1 << PCINT0);                            
   PCMSK0 |= (1 << PCINT1);                             
   PCMSK0 |= (1 << PCINT2);                      
-  PCMSK0 |= (1 << PCINT3);    
+  PCMSK0 |= (1 << PCINT3); 
+  PCMSK0 |= (1 << PCINT4)   
 
   //The next lines will calibrate the gyroscope drift.
   for(int i = 0; i < 2000; i++){
@@ -97,17 +98,18 @@ void setup() {
 
   //////////////////////////////
   //PID VALUES
-  pitch_proportional_gain = 1;
-  pitch_integral_gain = 0;
-  pitch_derivative_gain = 0;
+  pitch_proportional_gain = 3.4;
+  pitch_integral_gain = 0.01;
+  pitch_derivative_gain = 18;
   
   roll_proportional_gain = pitch_proportional_gain;
   roll_integral_gain = pitch_integral_gain;
   roll_derivative_gain = pitch_derivative_gain;
 
-  yaw_proportional_gain = 0;
-  yaw_integral_gain = 0;
+  yaw_proportional_gain = 3;
+  yaw_integral_gain = 0.01;
   yaw_derivative_gain = 0;
+
 }
 
 void loop() {
@@ -153,14 +155,14 @@ void loop() {
   ROLL_SET_ANGLE = 0;
   YAW_SET_ANGLE = 0;
 
-  if(CHANNEL1 > 1540) PITCH_SET_ANGLE = (CHANNEL1 - 1540)/6;
-  else if(CHANNEL1 < 1460) PITCH_SET_ANGLE = (CHANNEL1 - 1460)/6;
+  if(CHANNEL1 > 1540) PITCH_SET_ANGLE = (CHANNEL1 - 1540)/4;
+  else if(CHANNEL1 < 1460) PITCH_SET_ANGLE = (CHANNEL1 - 1460)/4;
 
-  if(CHANNEL2 > 1540) ROLL_SET_ANGLE = (CHANNEL2 - 1540)/6;
-  else if(CHANNEL2 < 1460) ROLL_SET_ANGLE = (CHANNEL2 - 1460)/6; 
+  if(CHANNEL2 > 1540) ROLL_SET_ANGLE = (CHANNEL2 - 1540)/4;
+  else if(CHANNEL2 < 1460) ROLL_SET_ANGLE = (CHANNEL2 - 1460)/4; 
 
-  if(CHANNEL4 > 1540) YAW_SET_ANGLE = (CHANNEL4 - 1540)/6;
-  else if(CHANNEL4 < 1460) YAW_SET_ANGLE = (CHANNEL4 - 1460)/6;
+  if(CHANNEL4 > 1540) YAW_SET_ANGLE = (CHANNEL4 - 1540)/4;
+  else if(CHANNEL4 < 1460) YAW_SET_ANGLE = (CHANNEL4 - 1460)/4;
 
   PITCH_SET_ANGLE -= (angle_pitch*6);
   ROLL_SET_ANGLE -= (angle_roll*6);
@@ -193,12 +195,12 @@ void loop() {
 
   /////////////////
   //PID CORRECTIONS
-  if(PID_ROLL >= 400) PID_ROLL = 400;
-  else if(PID_ROLL <= -400) PID_ROLL = -400;
-  if(PID_PITCH >= 400) PID_PITCH = 400;
-  else if(PID_PITCH <= -400) PID_PITCH = -400;
-  if(PID_YAW >= 400 ) PID_YAW = 400;
-  else if(PID_YAW <= -400 ) PID_YAW = -400;  
+  if(PID_ROLL >= 350) PID_ROLL = 350;
+  else if(PID_ROLL <= -350) PID_ROLL = -350;
+  if(PID_PITCH >= 350) PID_PITCH = 350;
+  else if(PID_PITCH <= -350) PID_PITCH = -350;
+  if(PID_YAW >= 350 ) PID_YAW = 400;
+  else if(PID_YAW <= -350 ) PID_YAW = -350;  
 
   //////////////////
   //ESC PULSE LENGHT
@@ -225,19 +227,25 @@ void loop() {
   //SEND PULSES
   timer_phase = micros();
   PORTD |= B11110000;
-  esc_timer_1 = esc_1 + timer_phase;
-  esc_timer_2 = esc_2 + timer_phase;
-  esc_timer_3 = esc_3 + timer_phase;
-  esc_timer_4 = esc_4 + timer_phase;
-
-  while(PORTD >= 16){
-    timer_phase = micros();
-    if(esc_timer_1 <= timer_phase) PORTD &= B11101111;
-    if(esc_timer_2 <= timer_phase) PORTD &= B11011111;
-    if(esc_timer_3 <= timer_phase) PORTD &= B10111111;
-    if(esc_timer_4 <= timer_phase) PORTD &= B01111111;
+  if(CHANNEL5 > 1500){
+    esc_timer_1 = esc_1 + timer_phase;
+    esc_timer_2 = esc_2 + timer_phase;
+    esc_timer_3 = esc_3 + timer_phase;
+    esc_timer_4 = esc_4 + timer_phase;
+    while(PORTD >= 16){
+      timer_phase = micros();
+      if(esc_timer_1 <= timer_phase) PORTD &= B11101111;
+      if(esc_timer_2 <= timer_phase) PORTD &= B11011111;
+      if(esc_timer_3 <= timer_phase) PORTD &= B10111111;
+      if(esc_timer_4 <= timer_phase) PORTD &= B01111111;
+    }
+  }else{
+    esc_timer_def = 1000 + timer_phase;
+    while(PORTD >= 16){
+      timer_phase = micros();
+      if(esc_timer_def <= timer_phase) PORTD &= B00001111;
+    }
   }
-
   timer[1] = micros();
   while(timer[1] - timer[0] <= 4000) timer[1] = micros();
 }
@@ -303,6 +311,16 @@ ISR(PCINT0_vect){
   }else if(CHANNEL_STATE_4 == 1){
     CHANNEL_STATE_4 = 0;
     CHANNEL4 = ISR_REFRESH_RATE - ICRR4;
+  }
+  //CHANNEL 5
+  if(PINB & B00010000){
+    if(CHANNEL_STATE_5 == 0){
+      CHANNEL_STATE_5 = 1;
+      ICRR5 = ISR_REFRESH_RATE;
+    }
+  }else if(CHANNEL_STATE_5 == 1){
+    CHANNEL_STATE_5 = 0;
+    CHANNEL5 = ISR_REFRESH_RATE - ICRR5;
   }
 }
 
