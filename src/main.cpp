@@ -80,7 +80,7 @@ void setup() {
   PCMSK0 |= (1 << PCINT1);                             
   PCMSK0 |= (1 << PCINT2);                      
   PCMSK0 |= (1 << PCINT3); 
-  PCMSK0 |= (1 << PCINT4)   
+  PCMSK0 |= (1 << PCINT4);   
 
   //The next lines will calibrate the gyroscope drift.
   for(int i = 0; i < 2000; i++){
