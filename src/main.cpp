@@ -45,7 +45,14 @@ int CHANNEL_STATE_1, CHANNEL_STATE_2, CHANNEL_STATE_3, CHANNEL_STATE_4, CHANNEL_
 unsigned long ICRR1, ICRR2, ICRR3, ICRR4, ICRR5, ICRR6;
 unsigned long ISR_REFRESH_RATE;
 
+int landing;
+float i_landing, e_landing, p_landing;
+float landing_proportional_gain, landing_integral_gain, landing_derivative_gain;
+float landing_acceleration;
+
 void setup() {
+  Serial.begin(2000000);
+
   Wire.begin();
   TWBR = 12;   //TWBR = ((F_CPU / frequency) - 16) / 2;
   
@@ -99,7 +106,7 @@ void setup() {
   //////////////////////////////
   //PID VALUES
   pitch_proportional_gain = 3.4;
-  pitch_integral_gain = 0.01;
+  pitch_integral_gain = 0.006;
   pitch_derivative_gain = 18;
   
   roll_proportional_gain = pitch_proportional_gain;
@@ -109,7 +116,13 @@ void setup() {
   yaw_proportional_gain = 3;
   yaw_integral_gain = 0.01;
   yaw_derivative_gain = 0;
+/* WIP
+  landing_proportional_gain = 0;
+  landing_integral_gain = 0;
+  landing_derivative_gain = 0;
 
+  landing_acceleration = 0;
+*/
 }
 
 void loop() {
@@ -223,11 +236,25 @@ void loop() {
   if(esc_4 <= 1088) esc_4 = 1088; 
   else if(esc_4 >= 2000) esc_4 = 2000;
 
+  //////////////////////////
+  /*LANDING PID CALCULATIONS (WIP)
+  e_landing = (sqrt(pow(raw_acc_pitch, 2) + pow(raw_acc_roll, 2) + pow(raw_acc_yaw, 2))*0.00239 - 9);
+  i_landing += e_landing * landing_integral_gain;
+  landing = e_landing * landing_proportional_gain + i_landing + (e_landing - p_landing) * landing_derivative_gain;
+  p_landing = e_landing;
+  */
   /////////////
   //SEND PULSES
   timer_phase = micros();
-  PORTD |= B11110000;
-  if(CHANNEL5 > 1500){
+  PORTD |= B11110000;  
+  
+  if(CHANNEL5 < 1100){
+    esc_timer_def = 1000 + timer_phase;
+    while(PORTD >= 16){
+      timer_phase = micros();
+      if(esc_timer_def <= timer_phase) PORTD &= B00001111;
+    }
+  }else{
     esc_timer_1 = esc_1 + timer_phase;
     esc_timer_2 = esc_2 + timer_phase;
     esc_timer_3 = esc_3 + timer_phase;
@@ -239,13 +266,8 @@ void loop() {
       if(esc_timer_3 <= timer_phase) PORTD &= B10111111;
       if(esc_timer_4 <= timer_phase) PORTD &= B01111111;
     }
-  }else{
-    esc_timer_def = 1000 + timer_phase;
-    while(PORTD >= 16){
-      timer_phase = micros();
-      if(esc_timer_def <= timer_phase) PORTD &= B00001111;
-    }
   }
+
   timer[1] = micros();
   while(timer[1] - timer[0] <= 4000) timer[1] = micros();
 }
