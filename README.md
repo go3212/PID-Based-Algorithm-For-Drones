@@ -15,7 +15,7 @@
  Connect your drone with the appropiate IMU orientation to your computer and ajust the code so that everything matches with it. Once you've done that the drone should be able to fly and balance itself. Since this is the first version of the code, it doesn't adapt to everyone's requirements thus allowing a future more sophisticated repo.
 
 ## Versioning
-* [Drone-Simple-Self-Leveling-API V1.0](https://github.com/go3212/Drone-Simple-Self-Leveling-API)
+* [Drone-Simple-Self-Leveling-API v1.0.0](https://github.com/go3212/Drone-Simple-Self-Leveling-API/releases/tag/v1.0.0)
 
 ## Authors
 * **Fernando Gómez Navia** - [go3212](https://github.com/go3212/)
