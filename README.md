@@ -21,18 +21,3 @@
 * **Fernando Gómez Navia** - [go3212](https://github.com/go3212/)
 ## Information
  [12/11/2019] This project is getting discontinued due to lack of time, in the future I'll be continuing the developement of this project. Today, I'll be publishing all the documents so that people can download the source code and get a better understanding of the current status.
-## License 
-   Copyright 2019 Fernando Gómez Navia
-
-   Licensed under the Apache License, Version 2.0 (the "License");
-   you may not use this file except in compliance with the License.
-   You may obtain a copy of the License at
-
-     http://www.apache.org/licenses/LICENSE-2.0
-
-   Unless required by applicable law or agreed to in writing, software
-   distributed under the License is distributed on an "AS IS" BASIS,
-   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-   See the License for the specific language governing permissions and
-   limitations under the License.
-
